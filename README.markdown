@@ -24,4 +24,5 @@ Using in your rails project
 ===========================
 
 In your environment.rb
+
     config.gem 'xtoddx-view_extender', :lib => 'view_extender', :source => 'http://gems.github.com'
