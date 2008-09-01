@@ -40,8 +40,15 @@ module ViewExtender
   #   Config.show_foo? ? '' : {:partial => 'foo' }
   # end
   #
+  # my_callback = lambda{ Config.show_foo? ? '' : {:partial => 'foo' } }
+  # ViewExtender.register('named_point', my_callback)
+  #
   def self.register key, *render_args, &blk
-    (Registry.instance[key] ||= []) << (blk || render_args)
+    (Registry.instance[key] ||= []) << (blk ?  [blk] : render_args)
+
+    # return a handle that can be used to unregister
+    # especially useful when using block semantics
+    blk || render_args
   end
 
   #
@@ -55,9 +62,9 @@ module ViewExtender
   # ViewExtender.register &prc
   # ViewExtender.unregister &prc
   #
-  def self.unregister key, *render_args, &blk
+  def self.unregister key, *render_args
     return unless Registry.instance[key]
-    Registry.instance[key].delete(blk || render_args)
+    Registry.instance[key].delete(render_args)
   end
 
   #
@@ -71,17 +78,19 @@ module ViewExtender
   #   ViewExtender.register('index:before_list', '<h3>Your List</h3>')
   #
   def extension_point key
-    if Registry.instance[key]
-      Registry.instance[key].collect do |render_args|
-        if render_args.is_a?(Proc)
-          render(render_args.call)
-        elsif render_args.length == 1 and render_args.first.is_a?(String)
-          render_args.first
-        else
-          render *render_args
-        end
-      end.join("\n")
-    end
+    return '' unless Registry.instance[key]
+    Registry.instance[key].collect do |render_args|
+      if render_args.first.is_a?(Proc)
+        render_args = [render_args.first.call]
+      end
+
+      if render_args.length == 1 and render_args.first.is_a?(String)
+        render_args.first
+      else
+        render *render_args
+      end
+
+    end.join("\n")
   end
 
   class Registry < Hash # :nodoc:
