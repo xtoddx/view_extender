@@ -13,11 +13,11 @@ context 'A class including the ViewExtender module' do
 
   context 'When extended with a string' do
     setup do
-      ViewExtender.register('test', 'A String')
+      ViewExtender.register('test', 'my_key', 'A String')
     end
 
     teardown do
-      ViewExtender.unregister('test', 'A String')
+      ViewExtender.unregister('test', 'my_key')
     end
 
     it 'should show the string in the output' do
@@ -25,7 +25,7 @@ context 'A class including the ViewExtender module' do
     end
 
     it 'should be able to unregister the extension' do
-      ViewExtender.unregister('test', 'A String')
+      ViewExtender.unregister('test', 'my_key')
       assert_equal '', @view.extension_point('test')
     end
   end
@@ -33,11 +33,11 @@ context 'A class including the ViewExtender module' do
   context 'When extended with a hash' do
     setup do
       @hash = {:partial => 'my_partial'}
-      ViewExtender.register('test', @hash)
+      ViewExtender.register('test', 'my_key', @hash)
     end
 
     teardown do
-      ViewExtender.unregister('test', @hash)
+      ViewExtender.unregister('test', 'my_key')
     end
 
     it 'should call `render` with the given hash' do
@@ -46,8 +46,11 @@ context 'A class including the ViewExtender module' do
     end
 
     it 'should be able to unregister the extension' do
-      ViewExtender.unregister('test', @hash)
+      ViewExtender.unregister('test', 'my_key')
+
+      # add a stub that will guarantee failure if called
       @view.stubs(:render).returns('EEEK -- I AM A FAILURE')
+
       assert_equal '', @view.extension_point('test')
     end
   end
@@ -55,11 +58,11 @@ context 'A class including the ViewExtender module' do
   context 'When extened with a proc that returns a string' do
     setup do
       @proc = lambda{ 'STRING' }
-      ViewExtender.register('test', @proc)
+      ViewExtender.register('test', 'my_key', @proc)
     end
 
     teardown do
-      ViewExtender.unregister('test', @proc)
+      ViewExtender.unregister('test', 'my_key')
     end
 
     it 'should output the given string' do
@@ -67,7 +70,7 @@ context 'A class including the ViewExtender module' do
     end
 
     it 'should be able to unregister the extension' do
-      ViewExtender.unregister('test', @proc)
+      ViewExtender.unregister('test', 'my_key')
       assert_equal '', @view.extension_point('test')
     end
   end
@@ -76,11 +79,11 @@ context 'A class including the ViewExtender module' do
     setup do
       @hash = {:partial => 'foo'}
       @proc = lambda{ @hash }
-      ViewExtender.register('test', @proc)
+      ViewExtender.register('test', 'my_key', @proc)
     end
 
     teardown do
-      ViewExtender.unregister('test', @proc)
+      ViewExtender.unregister('test', 'my_key')
     end
 
     it 'should call `render` with the given hash' do
@@ -89,7 +92,7 @@ context 'A class including the ViewExtender module' do
     end
 
     it 'should be able to unregister the extension' do
-      ViewExtender.unregister('test', @proc)
+      ViewExtender.unregister('test', 'my_key')
       @view.stubs(:render).returns('EEEK -- I AM A FAILURE')
       assert_equal '', @view.extension_point('test')
     end
@@ -98,13 +101,13 @@ context 'A class including the ViewExtender module' do
   context 'When extended with a block that returns a string' do
 
     setup do
-      @del_obj = ViewExtender.register('test') do
+      @del_obj = ViewExtender.register('test', 'my_key') do
                    'OUTPUT'
                  end
     end
 
     teardown do
-      ViewExtender.unregister('test', @del_obj)
+      ViewExtender.unregister('test', 'my_key')
     end
 
     it 'should output the given string' do
@@ -121,13 +124,13 @@ context 'A class including the ViewExtender module' do
 
     setup do
       @hash = {:partial => 'foo'}
-      @del_obj = ViewExtender.register('test') do
+      @del_obj = ViewExtender.register('test', 'my_key') do
                    @hash
                  end
     end
 
     teardown do
-      ViewExtender.unregister('test', @del_obj)
+      ViewExtender.unregister('test', 'my_key')
     end
 
     it 'should call `render` with the given hash' do

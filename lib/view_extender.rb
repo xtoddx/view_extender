@@ -19,8 +19,6 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-require 'singleton'
-
 #
 # This module gets included into ActionView::Base in init.rb, making
 # the instance method extension_point available in your views.  See
@@ -30,46 +28,61 @@ module ViewExtender
 
   #
   # This is how a plugin (or other extension method) will inject
-  # into your view.
+  # into a view.  You pass the point to hook into, a unique name
+  # that can be used to make sure it is not duplicated and you are able to
+  # delete it, and additional args are a block to be rendered.
   #
-  # ViewExtender.register('named_point', "String to display")
+  # The point to be hooked into (the first argument) will be some view that
+  # has a point like:
+  #     <%= extension_point 'named_point' %>
   #
-  # ViewExtender.register('named_point', :partial => 'my_partial')
+  # You can provide a string to output:
+  #   ViewExtender.register('named_point', 'my_key', "String to display")
   #
-  # ViewExtender.register('named_point') do 
-  #   Config.show_foo? ? '' : {:partial => 'foo' }
-  # end
+  # You could also (and most likely) pass argument to render:
+  #   ViewExtender.register('named_point', 'my_key', :partial => 'my_partial')
+  #
+  # Additional, you can pass a block that will return a valid third argument,
+  # which will be evaluated each time (useful to watch for config changes):
+  #   ViewExtender.register('named_point', 'my_key') do 
+  #     Config.show_foo? ? '' : {:partial => 'foo' }
+  #   end
   #
   # my_callback = lambda{ Config.show_foo? ? '' : {:partial => 'foo' } }
   # ViewExtender.register('named_point', my_callback)
   #
-  def self.register key, *render_args, &blk
-    (Registry.instance[key] ||= []) << (blk ?  [blk] : render_args)
+  def self.register point, key, *render_args, &blk
+    # map the block onto the args as a proc
+    render_args.push(blk) if blk
 
-    # return a handle that can be used to unregister
-    # especially useful when using block semantics
-    blk || render_args
+    # add it to the specified point
+    _registry.at(point).add(key, render_args)
+
+    # return the unique key that can be used to unregister it
+    key
   end
 
   #
   # If an extension point is no longer needed, it can be removed.
-  # Call with the same arguments it was added with.
+  # Call with the same point / key arguments it was added with.
   #
-  # If using a block, you will need to have it saved as a proc,
-  # because it will need to match exactly.
+  #   ViewExtender.register '/ext/point', 'my_key'
+  #   ViewExtender.unregister '/ext/point', 'my_key'
   #
-  # prc = lambda{ something? ? "You have something" : {:partial => 'nothing'} }
-  # ViewExtender.register &prc
-  # ViewExtender.unregister &prc
-  #
-  def self.unregister key, *render_args
-    return unless Registry.instance[key]
-    Registry.instance[key].delete(render_args)
+  # returns the args passed in
+  def self.unregister point, key
+    return nil unless _registry[point] and _registry[point][key]
+    rv = _registry[point].delete(key)
+    if _registry[point].empty?
+      _registry.delete(point)
+    end
+    rv
   end
 
   #
   # In your view files, call this anywhere the veiw could be extended.
-  # The argument 'key' is whatever you would like to name this extension point.
+  # The argument 'point' is whatever you would like to name this point,
+  # it will be used as the first argument in ViewExtender.register.
   #
   # In your view:
   #   <%= extension_point 'index:before_list' %>
@@ -77,13 +90,18 @@ module ViewExtender
   # In a plugin or anywhere else you'd like to add an extension:
   #   ViewExtender.register('index:before_list', '<h3>Your List</h3>')
   #
-  def extension_point key
-    return '' unless Registry.instance[key]
-    Registry.instance[key].collect do |render_args|
+  def extension_point point
+    reg = ViewExtender.send(:_registry)
+    return '' unless reg[point]
+    reg[point].values.collect do |render_args|
+
+      # if we took in a block, call with its output
       if render_args.first.is_a?(Proc)
         render_args = [render_args.first.call]
       end
 
+      # collect gets the result of this condition, which is either just
+      # a string that was passed in, or the results of a call to render
       if render_args.length == 1 and render_args.first.is_a?(String)
         render_args.first
       else
@@ -93,7 +111,20 @@ module ViewExtender
     end.join("\n")
   end
 
+  private
+
+  def self._registry
+    @registry ||= Registry.new
+  end
+
   class Registry < Hash # :nodoc:
-    include Singleton
+
+    # At the given point, return a sub-registry, create if necessary.
+    def at point
+      self[point] ||= Registry.new
+    end
+
+    # make an alias so things are more readable
+    alias :add :[]=
   end
 end
