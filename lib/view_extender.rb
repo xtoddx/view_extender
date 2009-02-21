@@ -99,24 +99,30 @@ module ViewExtender
   #   ViewExtender.register('index:things_list', :top, '<h3>Your List</h3>')
   #
   def extension_point point, &blk
+
+    # Testing HACK: integrate more with rails / erb to get rid of
+    # output() and @collected_output, always concat instead of output()
+    oco = @collected_output
+    @collected_output = ''
+
     reg = ViewExtender.send(:_registry)
 
     unless reg[point]
-      rv = ''
-      (rv << yield) if block_given? # run the block
-      return rv
+      (@collected_output << yield) if block_given? # run the block
+    else
+      render_at(reg[point][:before])
+      unless render_at(reg[point][:replace])
+        render_at(reg[point][:top])
+        (@collected_output << yield) if block_given?
+        render_at(reg[point][:bottom])
+      end
+      render_at(reg[point][:after])
     end
 
-    collected_output = ''
-    render_at(reg[point][:before], collected_output)
-    unless render_at(reg[point][:replace], collected_output)
-      render_at(reg[point][:top], collected_output)
-      (collected_output << yield) if block_given?
-      render_at(reg[point][:bottom], collected_output)
-    end
-    render_at(reg[point][:after], collected_output)
+    nco = @collected_output
+    @collected_output = oco
 
-    collected_output
+    nco
   end
 
   private
@@ -130,16 +136,24 @@ module ViewExtender
     _registry[point].values.flatten.detect{|x| x.key == key}
   end
 
-  def render_at(node_list, output)
+  def render_at(node_list)
     return unless node_list
     node_list.inject(false) do |rv,n|
       args = n.callback ? [n.callback.call].compact : n.render_args
       if args.length == 1 and args.first.is_a?(String)
-        output << args.first
+        output args.first
       elsif !args.empty?
-        output << render(*args)
+        output render(*args)
       end
       !args.empty? || rv
+    end
+  end
+
+  def output str
+    if respond_to?(:concat)
+      concat(str)
+    else
+      @collected_output << str
     end
   end
 

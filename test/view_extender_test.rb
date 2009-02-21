@@ -328,6 +328,13 @@ context 'A class including the ViewExtender module' do
       assert_equal 'INGLISHMAN', @view.extension_point('test'){'ING'}
       ViewExtender.unregister('test', 'my_key2')
     end
+
+    it 'should yield appropriately when nested' do
+      ViewExtender.register('test', :top, 'my_key', 'MAN')
+      ViewExtender.register('test2', :top, 'my_key2', 'LISH')
+      assert_equal 'MANLEADIN LISH LEADOUT', @view.extension_point('test'){ "LEADIN #{@view.extension_point('test2')} LEADOUT"}
+      ViewExtender.unregister('test', 'my_key2')
+    end
   end
 
   context 'when more than one point at same position' do
