@@ -26,6 +26,8 @@
 #
 module ViewExtender
 
+  VALID_POSITIONS = [:before, :after, :top, :bottom, :replace]
+
   #
   # This is how a plugin (or other extension method) will inject
   # into a view.  You pass the point to hook into, a unique name
@@ -34,49 +36,53 @@ module ViewExtender
   #
   # The point to be hooked into (the first argument) will be some view that
   # has a point like:
-  #     <%= extension_point 'named_point' %>
+  #     <% extension_point 'named_point' do %>
+  #       This is the default content of the point.
+  #     <% end %>
   #
   # You can provide a string to output:
-  #   ViewExtender.register('named_point', 'my_key', "String to display")
+  #   ViewExtender.register('named_point', :top, 'my_key', "String to display")
   #
   # You could also (and most likely) pass argument to render:
-  #   ViewExtender.register('named_point', 'my_key', :partial => 'my_partial')
+  #   ViewExtender.register('named_point', :bottom, 'my_key', :partial => 'my_partial')
   #
   # Additional, you can pass a block that will return a valid third argument,
   # which will be evaluated each time (useful to watch for config changes):
-  #   ViewExtender.register('named_point', 'my_key') do 
+  #   ViewExtender.register('named_point', :replace, 'my_key') do 
   #     Config.show_foo? ? '' : {:partial => 'foo' }
   #   end
   #
   # my_callback = lambda{ Config.show_foo? ? '' : {:partial => 'foo' } }
-  # ViewExtender.register('named_point', my_callback)
+  # ViewExtender.register('named_point', :before, my_callback)
   #
-  def self.register point, key, *render_args, &blk
-    # map the block onto the args as a proc
-    render_args.push(blk) if blk
-
+  # Returns a RenderNode object
+  #
+  def self.register point, position, key, *render_args, &blk
     # add it to the specified point
-    _registry.at(point).add(key, render_args)
-
-    # return the unique key that can be used to unregister it
-    key
+    if old = find_render_node_at_point(point, key)
+      old.remove
+    end
+    _registry.at(point).positioned(position).add(key, render_args, &blk)
   end
 
   #
   # If an extension point is no longer needed, it can be removed.
   # Call with the same point / key arguments it was added with.
   #
-  #   ViewExtender.register '/ext/point', 'my_key'
+  #   ViewExtender.register '/ext/point', :after, 'my_key'
   #   ViewExtender.unregister '/ext/point', 'my_key'
   #
-  # returns the args passed in
-  def self.unregister point, key
-    return nil unless _registry[point] and _registry[point][key]
-    rv = _registry[point].delete(key)
-    if _registry[point].empty?
-      _registry.delete(point)
-    end
-    rv
+  # Or call with the RenderNode returned by register
+  #
+  #   my_node = ViewExtender.register '/ext/point', :after, 'my_key'
+  #   ViewExtener.unregister my_node
+  #
+  def self.unregister point, key=nil
+    point = find_render_node_at_point(point, key) unless point.is_a?(RenderNode)
+    return nil unless point
+    point.remove
+    _registry.trim!
+    true
   end
 
   #
@@ -85,30 +91,32 @@ module ViewExtender
   # it will be used as the first argument in ViewExtender.register.
   #
   # In your view:
-  #   <%= extension_point 'index:before_list' %>
+  #   <% extension_point 'index:things_list' do %>
+  #     some default content
+  #   <% end %>
   #
   # In a plugin or anywhere else you'd like to add an extension:
-  #   ViewExtender.register('index:before_list', '<h3>Your List</h3>')
+  #   ViewExtender.register('index:things_list', :top, '<h3>Your List</h3>')
   #
-  def extension_point point
+  def extension_point point, &blk
     reg = ViewExtender.send(:_registry)
-    return '' unless reg[point]
-    reg[point].values.collect do |render_args|
 
-      # if we took in a block, call with its output
-      if render_args.first.is_a?(Proc)
-        render_args = [render_args.first.call]
-      end
+    unless reg[point]
+      rv = ''
+      (rv << yield) if block_given? # run the block
+      return rv
+    end
 
-      # collect gets the result of this condition, which is either just
-      # a string that was passed in, or the results of a call to render
-      if render_args.length == 1 and render_args.first.is_a?(String)
-        render_args.first
-      else
-        render *render_args
-      end
+    collected_output = ''
+    render_at(reg[point][:before], collected_output)
+    unless render_at(reg[point][:replace], collected_output)
+      render_at(reg[point][:top], collected_output)
+      (collected_output << yield) if block_given?
+      render_at(reg[point][:bottom], collected_output)
+    end
+    render_at(reg[point][:after], collected_output)
 
-    end.join("\n")
+    collected_output
   end
 
   private
@@ -117,14 +125,70 @@ module ViewExtender
     @registry ||= Registry.new
   end
 
-  class Registry < Hash # :nodoc:
+  def self.find_render_node_at_point(point, key)
+    return nil unless _registry[point]
+    _registry[point].values.flatten.detect{|x| x.key == key}
+  end
 
+  def render_at(node_list, output)
+    return unless node_list
+    node_list.inject(false) do |rv,n|
+      args = n.callback ? [n.callback.call].compact : n.render_args
+      if args.length == 1 and args.first.is_a?(String)
+        output << args.first
+      elsif !args.empty?
+        output << render(*args)
+      end
+      !args.empty? || rv
+    end
+  end
+
+  class Registry < Hash # :nodoc:
     # At the given point, return a sub-registry, create if necessary.
     def at point
       self[point] ||= Registry.new
     end
 
-    # make an alias so things are more readable
-    alias :add :[]=
+    # Used for positioning, just look up the next layer
+    def positioned where
+      self[where] ||= RenderNodeList.new
+    end
+
+    def trim!
+      keys.each do |k|
+        self[k].trim! if self[k].respond_to?(:trim!)
+        if self[k].empty?
+          self.delete(k)
+        end
+      end
+    end
   end
+
+  class RenderNodeList < Array
+    def add key, render_args, &blk
+      n = RenderNode.new(key, render_args, self, &blk)
+      self << n
+      n
+    end
+  end
+
+  class RenderNode
+    attr_accessor :key, :render_args, :node_list, :callback
+
+    def initialize key, render_args, node_list, &callback
+      if !callback and render_args.length == 1 and render_args.first.is_a?(Proc)
+        callback = render_args.shift
+      end
+      self.key = key
+      self.render_args = render_args
+      self.node_list = node_list
+      self.callback = callback
+    end
+
+    def remove
+      node_list.delete(self)
+    end
+
+  end
+
 end
