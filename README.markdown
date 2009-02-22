@@ -2,6 +2,7 @@ View Extender
 =============
 
 In your views put
+
     <%= extension_point 'my_extension_point_name' %>
 
 Plugins, etc can then add to this view via:
@@ -19,4 +20,6 @@ Plugins, etc can then add to this view via:
 
 There can be any number of extensions at a single point.  They will be
 displayed in the order they are added, joined by a newline. They can be removed
-via ViewExtender.unregister('my_key')
+via
+
+    ViewExtender.unregister('my_extension_point', 'my_key')
