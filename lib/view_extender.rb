@@ -150,11 +150,11 @@ module ViewExtender
   end
 
   def output str
-    if respond_to?(:concat)
-      concat(str)
-    else
+#    if respond_to?(:concat)
+#      concat(str)
+#    else
       @collected_output << str
-    end
+#    end
   end
 
   class Registry < Hash # :nodoc:
