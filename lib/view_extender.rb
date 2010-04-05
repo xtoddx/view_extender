@@ -108,12 +108,12 @@ module ViewExtender
     reg = ViewExtender.send(:_registry)
 
     unless reg[point]
-      (@collected_output << yield) if block_given? # run the block
+      (output(yield)) if block_given? # run the block
     else
       render_at(reg[point][:before])
       unless render_at(reg[point][:replace])
         render_at(reg[point][:top])
-        (@collected_output << yield) if block_given?
+        (output(yield)) if block_given?
         render_at(reg[point][:bottom])
       end
       render_at(reg[point][:after])
@@ -150,11 +150,11 @@ module ViewExtender
   end
 
   def output str
-#    if respond_to?(:concat)
-#      concat(str)
-#    else
+    if respond_to?(:concat)
+      concat(str)
+    else
       @collected_output << str
-#    end
+    end
   end
 
   class Registry < Hash # :nodoc:

@@ -3,7 +3,7 @@ View Extender
 
 In your views put
 
-    <%= extension_point 'my_extension_point_name' %>
+    <% extension_point 'my_extension_point_name' %>
 
 Or
 
