@@ -108,12 +108,21 @@ module ViewExtender
     reg = ViewExtender.send(:_registry)
 
     unless reg[point]
-      (@collected_output << yield) if block_given? # run the block
+      if block_given?
+        # blocks to extension_point should only be run, not output
+        # because haml / erb should be handling the output
+        output(capture(&blk))
+      end
     else
       render_at(reg[point][:before])
       unless render_at(reg[point][:replace])
         render_at(reg[point][:top])
-        (@collected_output << yield) if block_given?
+
+        # a block that gets registered should return something outputable
+        if block_given?
+          output(capture(&blk))
+        end
+
         render_at(reg[point][:bottom])
       end
       render_at(reg[point][:after])
@@ -150,11 +159,11 @@ module ViewExtender
   end
 
   def output str
-#    if respond_to?(:concat)
-#      concat(str)
-#    else
-      @collected_output << str
-#    end
+    if respond_to?(:concat)
+      concat(str)
+    else
+     @collected_output << str
+    end
   end
 
   class Registry < Hash # :nodoc:

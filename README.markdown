@@ -9,6 +9,7 @@ Or
 
     <% extension_point 'my_extension_point_name' do %>
       <div> DEFAULT CONTENT TO BE ALTERED </div>
+      <%= link_to 'My Widget', widget_path(@widget) %>
     <% end %>
 
 Plugins, etc can then add to this view via:
