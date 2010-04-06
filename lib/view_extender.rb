@@ -162,7 +162,7 @@ module ViewExtender
     if respond_to?(:concat)
       concat(str)
     else
-     @collected_output << str
+      @collected_output << str
     end
   end
 
